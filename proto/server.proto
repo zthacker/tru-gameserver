@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+option go_package = "google.golang.org/proto";
+
+package proto;
+
+service GameBackend {
+  rpc Connect(ConnectRequest) returns (ConnectResponse) {}
+  rpc Stream(stream Request) returns (stream Response) {}
+}
+
+message ConnectRequest {
+  string id = 1;
+  string name = 2;
+  string password = 3;
+}
+
+message ConnectResponse {
+  string token = 1;
+  repeated Entity entities = 2;
+}
+
+enum Direction {
+  UP = 0;
+  DOWN = 1;
+  LEFT = 2;
+  RIGHT = 3;
+  STOP = 4;
+}
+
+message Move {
+  Direction direction = 1;
+}
+
+message Coordinate {
+  int32 x = 1;
+  int32 y = 2;
+}
+
+message Player {
+  string id = 1;
+  string name = 2;
+  Coordinate position = 3;
+  string icon = 4;
+}
+
+
+message Entity {
+  oneof entity {
+    Player player = 2;
+  }
+}
+
+message AddEntity {
+  Entity entity = 1;
+}
+
+message UpdateEntity {
+  Entity entity = 1;
+}
+
+message RemoveEntity {
+  string id = 1;
+}
+
+message Request {
+  oneof action {
+    Move move = 1;
+  }
+}
+
+message Response {
+  oneof action {
+    AddEntity addEntity = 1;
+    UpdateEntity updateEntity = 2;
+    RemoveEntity removeEntity = 3;
+  }
+}
