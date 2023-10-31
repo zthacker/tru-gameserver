@@ -7,6 +7,7 @@ import (
 	pb "gameserver/proto"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"github.com/zthacker/dungeongenerator"
 	"google.golang.org/grpc/metadata"
 	"math/rand"
 	"sort"
@@ -15,12 +16,13 @@ import (
 )
 
 type client struct {
-	streamServer pb.GameBackend_StreamServer
-	lastMessage  time.Time
-	done         chan error
-	player       uuid.UUID
-	id           uuid.UUID
-	playerInfo   *backend.Player
+	streamServer   pb.GameBackend_StreamServer
+	lastMessage    time.Time
+	done           chan error
+	player         uuid.UUID
+	id             uuid.UUID
+	playerInfo     *backend.Player
+	currentDungeon *dungeongenerator.Room
 }
 
 type GameServer struct {
@@ -52,7 +54,7 @@ func (s *GameServer) Stream(srv pb.GameBackend_StreamServer) error {
 	}
 	currentClient.streamServer = srv
 
-	logrus.Info("start new server")
+	logrus.Infof("starting new stream for %s with id: %s", currentClient.playerInfo.Name, currentClient.player)
 
 	go func() {
 		for {
@@ -67,7 +69,40 @@ func (s *GameServer) Stream(srv pb.GameBackend_StreamServer) error {
 
 			switch req.GetAction().(type) {
 			case *pb.Request_Move:
-				logrus.Info("handling move request")
+				//TODO clean this up
+				move := req.GetMove()
+				logrus.Infof("%s is wanting to move: %s and is current in room: %d ", currentClient.playerInfo.Name, move.Direction, currentClient.currentDungeon.GetRoom())
+				switch move.Direction.String() {
+				case "UP":
+					if currentClient.currentDungeon.GetNorthDoor() != nil {
+						currentClient.currentDungeon = currentClient.currentDungeon.GetNorthDoor()
+						logrus.Infof("%s moved to Room: %d", currentClient.playerInfo.Name, currentClient.currentDungeon.GetRoom())
+
+					} else {
+						logrus.Infof("%s did not %s because there is not a door there!", currentClient.playerInfo.Name, move.Direction.String())
+					}
+				case "RIGHT":
+					if currentClient.currentDungeon.GetEastDoor() != nil {
+						currentClient.currentDungeon = currentClient.currentDungeon.GetEastDoor()
+						logrus.Infof("%s moved to Room: %d", currentClient.playerInfo.Name, currentClient.currentDungeon.GetRoom())
+					} else {
+						logrus.Infof("%s did not %s because there is not a door there!", currentClient.playerInfo.Name, move.Direction.String())
+					}
+				case "DOWN":
+					if currentClient.currentDungeon.GetSouthDoor() != nil {
+						currentClient.currentDungeon = currentClient.currentDungeon.GetSouthDoor()
+						logrus.Infof("%s moved to Room: %d", currentClient.playerInfo.Name, currentClient.currentDungeon.GetRoom())
+					} else {
+						logrus.Infof("%s did not %s because there is not a door there!", currentClient.playerInfo.Name, move.Direction.String())
+					}
+				case "LEFT":
+					if currentClient.currentDungeon.GetWestDoor() != nil {
+						currentClient.currentDungeon = currentClient.currentDungeon.GetWestDoor()
+						logrus.Infof("%s moved to Room: %d", currentClient.playerInfo.Name, currentClient.currentDungeon.GetRoom())
+					} else {
+						logrus.Infof("%s did not %s because there is not a door there!", currentClient.playerInfo.Name, move.Direction.String())
+					}
+				}
 			}
 		}
 	}()
@@ -136,14 +171,17 @@ func (s *GameServer) Connect(ctx context.Context, req *pb.ConnectRequest) (*pb.C
 	//s.broadcast(&resp)
 
 	// Add the new client to the game server
+	dung := dungeongenerator.NewDungeon(0)
+	dung.CreateDungeon(dung, 20)
 	s.mu.Lock()
 	token := uuid.New()
 	s.clients[token] = &client{
-		id:          token,
-		player:      playerID,
-		playerInfo:  player,
-		done:        make(chan error),
-		lastMessage: time.Now(),
+		id:             token,
+		player:         playerID,
+		playerInfo:     player,
+		done:           make(chan error),
+		lastMessage:    time.Now(),
+		currentDungeon: dung,
 	}
 	s.mu.Unlock()
 
@@ -195,7 +233,7 @@ func (s *GameServer) LocalChecks() {
 
 	go func() {
 		for {
-			logrus.Infof("Amount of Players on Server: %d", len(s.clients))
+			//logrus.Infof("Amount of Players on Server: %d", len(s.clients))
 			s.CheckLeaderboard()
 			time.Sleep(10 * time.Second)
 		}
@@ -205,7 +243,7 @@ func (s *GameServer) LocalChecks() {
 
 // CheckLeaderboard is a dev function to just test out some leader board ideas that would be sent to clients
 func (s *GameServer) CheckLeaderboard() {
-	logrus.Info("checking leader board")
+	//logrus.Info("checking leader board")
 	leaderMap := make(map[int]string)
 	s.mu.Lock()
 	for _, v := range s.clients {
@@ -221,8 +259,8 @@ func (s *GameServer) CheckLeaderboard() {
 
 	sort.Sort(sort.Reverse(sort.IntSlice(keys)))
 
-	for _, k := range keys {
-		logrus.Info(k, leaderMap[k])
-	}
+	//for _, k := range keys {
+	//	logrus.Info(k, leaderMap[k])
+	//}
 
 }
